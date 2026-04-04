@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vaudio | AI Financial Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="login-container glass-panel">
+        <div class="login-header">
+            <h1>Vaudio</h1>
+            <p>Intelligence mapping for financial strategy.</p>
+        </div>
+        
+        <form method="POST" action="/login">
+            <button type="submit" name="role" value="Home" class="role-btn">
+                <i class="fa-solid fa-house"></i> Home Access
+            </button>
+            <button type="submit" name="role" value="Corporate" class="role-btn">
+                <i class="fa-solid fa-briefcase"></i> Corporate Access
+            </button>
+        </form>
+    </div>
+</body>
+</html>

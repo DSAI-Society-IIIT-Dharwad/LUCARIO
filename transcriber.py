@@ -18,6 +18,7 @@ if diarization_pipeline is not None:
 else:
     print("❌ Failed to load Pyannote pipeline. Check your HF_TOKEN and model agreements.")
 
+import math
 import numpy as np
 from scipy.io import wavfile
 
@@ -32,16 +33,30 @@ def transcribe_audio(file_path):
     else:
         audio_data = data.astype(np.float32)
         
+    # Critically Important: Convert stereo to mono because Browser microphones often capture 2 channels
+    if len(audio_data.shape) > 1:
+        audio_data = np.mean(audio_data, axis=1, dtype=np.float32)
+        
+    # Whisper expects a flat 1D array
     whisper_audio = audio_data.flatten()
     
-    # Pyannote expects a dictionary format for preloaded memory audio
+    # Pyannote expects [channels, time] format
     pyannote_audio = {
         "waveform": torch.from_numpy(audio_data).unsqueeze(0),
         "sample_rate": sample_rate
     }
 
     print("🗣️ Running Whisper transcription...")
-    result = model.transcribe(whisper_audio, language="en", word_timestamps=True)
+    # Removed language="en" to allow default multilingual language detection
+    # condition_on_previous_text=False prevents the model from getting "stuck" in the language of the first speaker
+    finance_prompt = "The following is a conversation between a financial advisor and a client discussing investments, mutual funds, loans, and other financial topics."
+    result = model.transcribe(
+        whisper_audio, 
+        word_timestamps=True, 
+        condition_on_previous_text=False,
+        initial_prompt=finance_prompt,
+        no_speech_threshold=0.6
+    )
     
     print("🧑‍🤝‍🧑 Running speaker diarization...")
     if diarization_pipeline is None:
@@ -64,6 +79,13 @@ def transcribe_audio(file_path):
                 assigned_speaker = speaker
                 break
                 
-        final_output.append(f"[{assigned_speaker}] {segment['text'].strip()}")
+        words = segment.get("words", [])
+        if words:
+            probs = [w.get("probability", 0.0) for w in words]
+            confidence = (sum(probs) / len(probs)) * 100 if probs else 0.0
+        else:
+            confidence = math.exp(segment.get("avg_logprob", 0)) * 100
+            
+        final_output.append(f"[{assigned_speaker}] {segment['text'].strip()} (Conf: {confidence:.1f}%)")
     
     return "\n".join(final_output)

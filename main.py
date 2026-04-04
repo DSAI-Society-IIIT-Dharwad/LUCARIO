@@ -17,6 +17,10 @@ def run_voice_engine():
     # Step 3: Clean text
     cleaned = clean_text(transcript)
 
+    if not cleaned.strip():
+        print("\n❌ No speech or words were detected in the audio recording.")
+        return
+
     # Step 4: Summarize
     print("📝 Generating summary...")
     summary = generate_summary(cleaned)

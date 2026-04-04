@@ -40,7 +40,7 @@ def create_pdf_report(transcript, summary):
             # Wrap text to prevent FPDF layout crashing on long contiguous strings
             wrapped = textwrap.wrap(clean_text_for_pdf(line.strip()), width=95)
             for w in wrapped:
-                pdf.multi_cell(0, 6, txt=w)
+                pdf.cell(0, 6, txt=w, ln=True)
             
     pdf.ln(5)
     
@@ -53,7 +53,7 @@ def create_pdf_report(transcript, summary):
         if line.strip():
             wrapped = textwrap.wrap(line.strip(), width=95)
             for w in wrapped:
-                pdf.multi_cell(0, 6, txt=w)
+                pdf.cell(0, 6, txt=w, ln=True)
             
     output_path = "reports/Financial_Summary.pdf"
     pdf.output(output_path)

@@ -30,8 +30,11 @@ Respond ONLY with a valid JSON document structured exactly as follows:
     "SPEAKER_01": "Assumed Role (e.g. Client)"
   },
   "proactive_suggestions": [
-     "Suggestion 1: Calculate the missing EMI here if possible.",
-     "Suggestion 2: Actionable advice or missing variables."
+     "Suggestion 1: Calculate the missing EMI here if possible."
+  ],
+  "risk_score": 50,
+  "reminders": [
+     "Specific task or follow-up date extracted from text."
   ]
 }
 """
@@ -78,10 +81,17 @@ def generate_summary(text):
             for sig in suggestions:
                 markdown_output += f"- {sig}\n"
             
-        return markdown_output
+        risk_score = data.get('risk_score', 0)
+        reminders = data.get('reminders', [])
+        
+        return {
+            "summary": markdown_output,
+            "risk_score": risk_score,
+            "reminders": reminders
+        }
         
     except Exception as e:
-        return f"❌ Failed to parse response: {str(e)}\n\nPlease ensure your API key has quota and access."
+        return {"summary": f"❌ Failed to parse response: {str(e)}\n\nPlease ensure your API key has quota and access.", "risk_score": 0, "reminders": []}
 
 def setup_qa_session(transcript, summary_markdown):
     if not GEMINI_API_KEY:
