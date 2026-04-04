@@ -1,0 +1,9 @@
+openai-whisper
+torch
+transformers
+sounddevice
+scipy
+python-dotenv
+google-generativeai
+fpdf2
+pyannote.audio>=3.3.1
