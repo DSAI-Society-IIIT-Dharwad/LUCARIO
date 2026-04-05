@@ -15,7 +15,8 @@ diarization_pipeline = Pipeline.from_pretrained(
     token=HF_TOKEN
 )
 if diarization_pipeline is not None:
-    diarization_pipeline.to(device)
+    # Offloading to CPU to save GPU VRAM (crucial for 4GB cards)
+    diarization_pipeline.to(torch.device("cpu"))
 else:
     print("❌ Failed to load Pyannote pipeline. Check your HF_TOKEN and model agreements.")
 
@@ -50,16 +51,20 @@ def transcribe_audio(file_path):
     print(f"🗣️ Running Whisper transcription on {device}...")
     # Removed language="en" to allow default multilingual language detection
     # condition_on_previous_text=False prevents the model from getting "stuck" in the language of the first speaker
-    finance_prompt = "The following is a conversation between a financial advisor and a client discussing investments, mutual funds, loans, and other financial topics."
+    # Shorter, more balanced prompt to prevent English "lock-in"
+    finance_prompt = "हिन्दी, தமிழ், English. Mixed language conversation about home loans, EMI, and interest rates. Please transcribe in the original languages (Devanagari for Hindi, Tamil script for Tamil, English for English)."
+    
     result = model.transcribe(
         whisper_audio, 
+        task="transcribe", # Explicitly ensure it's not trying to translate to English
         word_timestamps=True, 
         condition_on_previous_text=False,
         initial_prompt=finance_prompt,
-        no_speech_threshold=0.6
+        no_speech_threshold=0.6,
+        fp16=True 
     )
     
-    print("🧑‍🤝‍🧑 Running speaker diarization...")
+    print("🧑‍🤝‍🧑 Running speaker diarization on CPU...")
     if diarization_pipeline is None:
         return result["text"]
         
@@ -88,5 +93,8 @@ def transcribe_audio(file_path):
             confidence = math.exp(segment.get("avg_logprob", 0)) * 100
             
         final_output.append(f"[{assigned_speaker}] {segment['text'].strip()} (Conf: {confidence:.1f}%)")
+    
+    # CRITICAL: Clear GPU cache for 4GB VRAM stability
+    torch.cuda.empty_cache()
     
     return "\n".join(final_output)

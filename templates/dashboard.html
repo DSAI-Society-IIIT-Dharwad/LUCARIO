@@ -37,9 +37,9 @@
             </p>
 
             {% if role == 'Corporate' %}
-            <div class="trigger-info" id="trigger-info">
+            <div class="trigger-info" id="trigger-info" style="display: none;">
                 <i class="fa-solid fa-ear-listen" style="margin-right:5px;"></i>
-                Auto-Trigger Active.<br>Say <strong>"Start Meeting"</strong>, <strong>"Discuss Finance"</strong>, etc.
+                Auto-Trigger Active.<br>Say <strong>"Start Recording"</strong>, <strong>"Loan Application"</strong>, etc.
             </div>
             {% endif %}
         </aside>
@@ -263,34 +263,67 @@
         };
 
         // ============================================================
-        // VOICE TRIGGER (Corporate only)
+        // VOICE TRIGGER (Always-on Listener)
         // ============================================================
         let recognition = null;
-        if (USER_ROLE === 'Corporate') {
+        function initVoiceTrigger() {
             const triggerEl = document.getElementById('trigger-info');
-            if (triggerEl) triggerEl.style.display = 'block';
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
             if (SR) {
+                if (triggerEl) triggerEl.style.display = 'block';
                 recognition = new SR();
                 recognition.continuous = true;
                 recognition.interimResults = true;
+                recognition.lang = 'en-US'; // Specifically look for English trigger words
+                
                 recognition.onstart = () => {
                     if (!isRecording) {
                         btn.classList.add('listening');
-                        statusText.innerText = "Listening for trigger phrases or Click to Record";
+                        statusText.innerText = "Listening for triggers (e.g. 'Start Recording')...";
+                        console.log("🎙️ Voice trigger listener active.");
                     }
                 };
+                
                 recognition.onresult = event => {
                     if (isRecording) return;
                     for (let i = event.resultIndex; i < event.results.length; i++) {
-                        const t = event.results[i][0].transcript.toLowerCase();
-                        const triggers = ['start meeting', 'begin meeting', 'discuss finance', 'loan application', 'start recording', 'financial review', 'open account'];
-                        if (triggers.some(p => t.includes(p))) { recognition.stop(); startRecording(); return; }
+                        const transcript = event.results[i][0].transcript.toLowerCase();
+                        console.log("👂 Heard:", transcript);
+                        const triggers = [
+                            'start meeting', 'begin meeting', 'discuss finance', 
+                            'loan application', 'start recording', 'financial review', 
+                            'open account', 'hello vaudio'
+                        ];
+                        if (triggers.some(p => transcript.includes(p))) {
+                            console.log("🚀 Trigger word detected! Starting recording...");
+                            recognition.stop(); 
+                            startRecording(); 
+                            return; 
+                        }
                     }
                 };
-                recognition.onend = () => { if (!isRecording) { try { recognition.start(); } catch (e) {} } };
-                recognition.start();
+                
+                recognition.onerror = (event) => {
+                    console.error("🎙️ Speech Recognition Error:", event.error);
+                };
+
+                recognition.onend = () => { 
+                    // Automatically restart unless we are currently recording or if it was stopped by the user
+                    if (!isRecording) {
+                        try { recognition.start(); } catch (e) {} 
+                    }
+                };
+                
+                try { recognition.start(); } catch (e) { console.error("Failed to start recognition:", e); }
+            } else {
+                console.warn("Speech Recognition not supported in this browser.");
             }
+        }
+        
+        // Start listener on page load (Corporate Only)
+        if (USER_ROLE === 'Corporate') {
+            initVoiceTrigger();
         }
 
         // ============================================================

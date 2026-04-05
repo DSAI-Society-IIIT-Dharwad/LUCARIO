@@ -24,7 +24,7 @@ Respond ONLY with a valid JSON document structured exactly as follows:
     "loan_amount": "Amount if mentioned, else None",
     "interest_rate": "Rate if mentioned, else None",
     "tenure": "Tenure/duration if mentioned, else None",
-    "emi": "EMI if mentioned, else None"
+    "emi": "EMI if mentioned or calculated estimate based on Amount/Rate, else None"
   },
   "speakers_identified": {
     "SPEAKER_00": "Assumed Role (e.g. Agent)",
@@ -64,7 +64,7 @@ Respond ONLY with a valid JSON document structured exactly as follows:
     "loan_amount": "Facility amount if mentioned, else None",
     "interest_rate": "Applicable rate / spread if mentioned, else None",
     "tenure": "Tenor/maturity if mentioned, else None",
-    "emi": "Debt service obligation / installment if mentioned, else None"
+    "emi": "Debt service obligation / installment if mentioned or calculated estimate, else None"
   },
   "speakers_identified": {
     "SPEAKER_00": "Assumed Professional Role (e.g. Relationship Manager)",
@@ -196,7 +196,7 @@ You are answering questions about a specific recorded financial conversation.
 === AI-EXTRACTED SUMMARY ===
 {summary}
 
-Base your answers strictly on the above meeting content. If something is not mentioned, say so honestly.
+Base your answers on the meeting content provided above. If an EMI or calculation is requested and the core data is in the transcript but the calculation itself is missing, please PERFORM the calculation to be helpful. Assume a standard 10-year period if the tenure is missing.
 """
 
     # Build Gemini chat history: seed with context, then replay prior messages
