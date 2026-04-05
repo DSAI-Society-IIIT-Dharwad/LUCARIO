@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vaudio Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">Vaudio</div>
+        <div style="display:flex; align-items:center; gap:1.5rem;">
+            <span class="user-badge-nav">
+                <i class="fa-solid fa-user-shield"></i> {{ role }} Mode
+            </span>
+            <a href="/logout" class="logout-btn">Logout <i class="fa-solid fa-arrow-right-from-bracket"></i></a>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar glass-panel">
+            <p style="color: var(--text-secondary); line-height: 1.7; font-size: 0.9rem;">
+                {% if role == 'Corporate' %}
+                <strong style="color:var(--text-primary);">Corporate Mode</strong><br>
+                Record institutional financial discussions. AI will apply a regulatory and compliance lens, referencing RBI, SEBI, and IND AS standards.
+                {% else %}
+                <strong style="color:var(--text-primary);">Home Mode</strong><br>
+                Record personal financial conversations. AI extracts key data, estimates EMI, and suggests practical next steps.
+                {% endif %}
+            </p>
+
+            {% if role == 'Corporate' %}
+            <div class="trigger-info" id="trigger-info">
+                <i class="fa-solid fa-ear-listen" style="margin-right:5px;"></i>
+                Auto-Trigger Active.<br>Say <strong>"Start Meeting"</strong>, <strong>"Discuss Finance"</strong>, etc.
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+
+            <!-- TAB BAR -->
+            <div class="tab-bar glass-panel">
+                <button class="tab-btn active" id="tab-btn-record" onclick="switchTab('record')">
+                    <i class="fa-solid fa-microphone"></i>
+                    <span>Record</span>
+                </button>
+                <button class="tab-btn" id="tab-btn-history" onclick="switchTab('history')">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>History</span>
+                </button>
+                <button class="tab-btn" id="tab-btn-chat" onclick="switchTab('chat')">
+                    <i class="fa-solid fa-comments"></i>
+                    <span>AI Chat</span>
+                </button>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- RECORD TAB                                                 -->
+            <!-- ======================================================== -->
+            <div class="tab-content" id="tab-record">
+                <div class="record-trigger-container glass-panel">
+                    <button class="record-btn" id="record-btn">
+                        <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <div class="status-text" id="status-text">Ready to Record</div>
+                </div>
+
+                <div class="loader-container" id="loader">
+                    <div class="spinner" style="display:block;"></div>
+                    <p>Analyzing conversation...</p>
+                </div>
+
+                <div class="results-pane glass-panel" id="results-pane" style="display:none;">
+                    <div class="markdown-body" id="summary-content"></div>
+
+                    <div class="action-buttons">
+                        <button class="role-btn action-btn-blue" id="download-txt-btn">
+                            <i class="fa-solid fa-file-lines"></i> Download TXT
+                        </button>
+                        <button class="role-btn action-btn-green" id="edit-transcript-btn" onclick="toggleEditMode()">
+                            <i class="fa-solid fa-pen-to-square"></i> Edit Transcript
+                        </button>
+                        <button class="role-btn action-btn-purple" onclick="openChatForLatest()">
+                            <i class="fa-solid fa-comments"></i> Ask AI About This
+                        </button>
+                    </div>
+
+                    <hr style="border:0; border-top:1px solid var(--border-glass); margin:1.5rem 0;">
+                    <div class="markdown-body" id="transcript-content"></div>
+                </div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- HISTORY TAB                                                -->
+            <!-- ======================================================== -->
+            <div class="tab-content" id="tab-history" style="display:none;">
+                <div class="glass-panel" style="padding:1.5rem 2rem; margin-bottom:1.5rem;">
+                    <h2 style="margin:0 0 1.5rem 0; font-size:1.2rem; color:var(--text-primary);">
+                        <i class="fa-solid fa-chart-line" style="color:#60a5fa;"></i> Risk Score Timeline
+                    </h2>
+                    <div style="width:100%; height:220px;">
+                        <canvas id="riskChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="history-loader" class="loader-container">
+                    <div class="spinner" style="display:block;"></div>
+                    <p>Loading conversations...</p>
+                </div>
+
+                <div id="history-list"></div>
+            </div>
+
+            <!-- ======================================================== -->
+            <!-- CHAT TAB                                                   -->
+            <!-- ======================================================== -->
+            <div class="tab-content" id="tab-chat" style="display:none;">
+                <div class="chat-wrapper glass-panel">
+                    <div class="chat-header">
+                        <div style="display:flex; align-items:center; gap:1rem; flex:1;">
+                            <div class="chat-avatar">
+                                <i class="fa-solid fa-robot"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight:700; font-size:1rem;">AI Financial Assistant</div>
+                                <div class="chat-context-label" id="chat-context-label">Select a conversation to begin</div>
+                            </div>
+                        </div>
+                        <select id="chat-conv-select" class="chat-conv-select" onchange="onConvSelectChange()">
+                            <option value="">— Select conversation —</option>
+                        </select>
+                    </div>
+
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="chat-welcome" id="chat-welcome">
+                            <i class="fa-solid fa-comments" style="font-size:3rem; opacity:0.2; margin-bottom:1rem; display:block;"></i>
+                            <p style="color:var(--text-secondary); max-width:380px; margin:0 auto; line-height:1.7;">
+                                Choose a past conversation from the dropdown above, or record a new one and press
+                                <strong>"Ask AI About This"</strong> to start the chat.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="chat-input-bar">
+                        <input type="text" id="chat-input" class="chat-input"
+                               placeholder="Ask about this financial conversation..."
+                               onkeydown="handleChatKeydown(event)"
+                               disabled>
+                        <button id="chat-send-btn" class="chat-send-btn" onclick="sendChatMessage()" disabled>
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const USER_ROLE = "{{ role }}";
+    </script>
+
+    <script>
+        // ============================================================
+        // TAB SYSTEM
+        // ============================================================
+        let historyLoaded = false;
+        let historyChart = null;
+
+        function switchTab(name) {
+            ['record', 'history', 'chat'].forEach(t => {
+                document.getElementById('tab-' + t).style.display = 'none';
+                document.getElementById('tab-btn-' + t).classList.remove('active');
+            });
+            document.getElementById('tab-' + name).style.display = 'block';
+            document.getElementById('tab-btn-' + name).classList.add('active');
+
+            if (name === 'history' && !historyLoaded) {
+                loadHistory();
+                historyLoaded = true;
+            }
+            if (name === 'chat' && chatConversations.length === 0) {
+                loadChatConversations();
+            }
+        }
+
+        // ============================================================
+        // RECORDING LOGIC
+        // ============================================================
+        let mediaRecorder, audioChunks = [], isRecording = false;
+        const btn = document.getElementById('record-btn');
+        const statusText = document.getElementById('status-text');
+        const resultsPane = document.getElementById('results-pane');
+        const loader = document.getElementById('loader');
+
+        async function startRecording() {
+            if (isRecording) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    const webmBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                    const fileReader = new FileReader();
+                    fileReader.onload = e => {
+                        audioContext.decodeAudioData(e.target.result,
+                            buffer => sendAudioToServer(bufferToWave(buffer, buffer.length)),
+                            err => { console.error(err); alert("Failed to decode audio."); }
+                        );
+                    };
+                    fileReader.readAsArrayBuffer(webmBlob);
+                };
+                mediaRecorder.start();
+                isRecording = true;
+                btn.classList.remove('listening');
+                btn.classList.add('recording');
+                btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+                statusText.innerText = "Recording... Press to stop.";
+                resultsPane.style.display = 'none';
+            } catch (err) {
+                alert("Please allow microphone access to record.");
+            }
+        }
+
+        function stopRecording() {
+            if (!isRecording) return;
+            mediaRecorder.stop();
+            mediaRecorder.stream.getTracks().forEach(t => t.stop());
+            isRecording = false;
+            btn.classList.remove('recording');
+            btn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+            statusText.innerText = "Processing Audio...";
+            loader.style.display = 'block';
+            if (USER_ROLE === 'Corporate' && recognition) {
+                setTimeout(() => {
+                    if (!isRecording) {
+                        try { recognition.start(); } catch (e) {}
+                        btn.classList.add('listening');
+                        statusText.innerText = "Listening for trigger phrases or Click to Record";
+                    }
+                }, 3000);
+            }
+        }
+
+        btn.onclick = () => {
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+                if (recognition) { try { recognition.stop(); } catch (e) {} }
+            }
+        };
+
+        // ============================================================
+        // VOICE TRIGGER (Corporate only)
+        // ============================================================
+        let recognition = null;
+        if (USER_ROLE === 'Corporate') {
+            const triggerEl = document.getElementById('trigger-info');
+            if (triggerEl) triggerEl.style.display = 'block';
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SR) {
+                recognition = new SR();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.onstart = () => {
+                    if (!isRecording) {
+                        btn.classList.add('listening');
+                        statusText.innerText = "Listening for trigger phrases or Click to Record";
+                    }
+                };
+                recognition.onresult = event => {
+                    if (isRecording) return;
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const t = event.results[i][0].transcript.toLowerCase();
+                        const triggers = ['start meeting', 'begin meeting', 'discuss finance', 'loan application', 'start recording', 'financial review', 'open account'];
+                        if (triggers.some(p => t.includes(p))) { recognition.stop(); startRecording(); return; }
+                    }
+                };
+                recognition.onend = () => { if (!isRecording) { try { recognition.start(); } catch (e) {} } };
+                recognition.start();
+            }
+        }
+
+        // ============================================================
+        // WAV ENCODER
+        // ============================================================
+        function bufferToWave(abuffer, len) {
+            let numOfChan = abuffer.numberOfChannels,
+                length = len * numOfChan * 2 + 44,
+                buffer = new ArrayBuffer(length),
+                view = new DataView(buffer),
+                channels = [], i, sample, offset = 0, pos = 0;
+            const u16 = d => { view.setUint16(offset, d, true); offset += 2; };
+            const u32 = d => { view.setUint32(offset, d, true); offset += 4; };
+            u32(0x46464952); u32(length - 8); u32(0x45564157);
+            u32(0x20746d66); u32(16); u16(1); u16(numOfChan);
+            u32(abuffer.sampleRate); u32(abuffer.sampleRate * 2 * numOfChan);
+            u16(numOfChan * 2); u16(16);
+            u32(0x61746164); u32(length - offset - 4);
+            for (i = 0; i < abuffer.numberOfChannels; i++) channels.push(abuffer.getChannelData(i));
+            while (pos < len) {
+                for (i = 0; i < numOfChan; i++) {
+                    sample = Math.max(-1, Math.min(1, channels[i][pos]));
+                    sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+                    view.setInt16(offset, sample, true); offset += 2;
+                }
+                pos++;
+            }
+            return new Blob([buffer], { type: "audio/wav" });
+        }
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        let latestTranscript = "", latestSummary = "", latestConversationId = null, isEditMode = false;
+
+        function toggleEditMode() {
+            const container = document.getElementById('transcript-content');
+            const editBtn = document.getElementById('edit-transcript-btn');
+            if (!isEditMode) {
+                isEditMode = true;
+                container.innerHTML = `
+                    <textarea id="transcript-editor" style="width:100%;height:240px;padding:14px;border-radius:10px;font-family:monospace;font-size:0.9rem;background:rgba(0,0,0,0.04);color:var(--text-primary);border:1px solid var(--border-glass);resize:vertical;">${latestTranscript}</textarea>
+                    <div style="margin-top:12px;display:flex;gap:8px;">
+                        <button class="role-btn" style="width:auto;padding:0.55rem 1.2rem;background:var(--primary) !important;color:white;" onclick="saveTranscript()">
+                            <i class="fa-solid fa-save"></i> Save & Re-Analyze
+                        </button>
+                        <button class="role-btn" style="width:auto;padding:0.55rem 1.2rem;background:rgba(239,68,68,0.15);" onclick="cancelEdit()">
+                            <i class="fa-solid fa-times"></i> Cancel
+                        </button>
+                    </div>`;
+                editBtn.style.display = 'none';
+            }
+        }
+
+        function cancelEdit() {
+            isEditMode = false;
+            document.getElementById('transcript-content').innerHTML = DOMPurify.sanitize(marked.parse("### 📜 Raw Transcript\n\n" + latestTranscript));
+            document.getElementById('edit-transcript-btn').style.display = 'inline-flex';
+        }
+
+        async function saveTranscript() {
+            const newText = document.getElementById('transcript-editor').value;
+            loader.style.display = 'block';
+            resultsPane.style.display = 'none';
+            statusText.innerText = "Re-analyzing...";
+            try {
+                const res = await fetch('/api/update_transcript', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: latestConversationId, transcript: newText, role: USER_ROLE })
+                });
+                const data = await res.json();
+                loader.style.display = 'none';
+                statusText.innerText = "Ready to Record";
+                if (data.error) { alert('Error: ' + data.error); resultsPane.style.display = 'block'; }
+                else {
+                    latestTranscript = data.transcript;
+                    latestSummary = data.summary;
+                    document.getElementById('summary-content').innerHTML = DOMPurify.sanitize(marked.parse(data.summary));
+                    cancelEdit();
+                    resultsPane.style.display = 'block';
+                    historyLoaded = false;
+                    loadChatConversations();
+                }
+            } catch (err) {
+                alert("Update failed: " + err);
+                loader.style.display = 'none';
+                resultsPane.style.display = 'block';
+            }
+        }
+
+        // TXT Download
+        document.getElementById('download-txt-btn').onclick = async () => {
+            const b = document.getElementById('download-txt-btn');
+            b.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Generating...';
+            try {
+                const res = await fetch('/api/download_txt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transcript: latestTranscript, summary: latestSummary })
+                });
+                if (!res.ok) throw new Error("Failed");
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'Vaudio_Financial_Report.txt';
+                document.body.appendChild(a); a.click(); a.remove();
+                window.URL.revokeObjectURL(url);
+            } catch (err) { alert("Error: " + err); }
+            b.innerHTML = '<i class="fa-solid fa-file-lines"></i> Download TXT';
+        };
+
+        // Send audio to server
+        async function sendAudioToServer(blob) {
+            const formData = new FormData();
+            formData.append('audio', blob, 'browser_recording.wav');
+            formData.append('role', USER_ROLE);
+            try {
+                const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+                const data = await res.json();
+                loader.style.display = 'none';
+                statusText.innerText = "Ready to Record";
+                if (data.error) { alert('Error: ' + data.error); }
+                else {
+                    latestConversationId = data.id;
+                    latestTranscript = data.transcript;
+                    latestSummary = data.summary;
+                    document.getElementById('summary-content').innerHTML = DOMPurify.sanitize(marked.parse(data.summary));
+                    document.getElementById('transcript-content').innerHTML = DOMPurify.sanitize(marked.parse("### 📜 Raw Transcript\n\n" + data.transcript));
+                    resultsPane.style.display = 'block';
+                    historyLoaded = false;
+                    loadChatConversations();
+                }
+            } catch (err) {
+                loader.style.display = 'none';
+                statusText.innerText = "Ready to Record";
+                alert("Failed to connect to the server.");
+            }
+        }
+
+        function openChatForLatest() {
+            if (!latestConversationId) return;
+            switchTab('chat');
+            setTimeout(() => {
+                const sel = document.getElementById('chat-conv-select');
+                if (sel.querySelector(`option[value="${latestConversationId}"]`)) {
+                    sel.value = latestConversationId;
+                    onConvSelectChange();
+                } else {
+                    loadChatConversations().then(() => {
+                        sel.value = latestConversationId;
+                        onConvSelectChange();
+                    });
+                }
+            }, 150);
+        }
+
+        // ============================================================
+        // HISTORY TAB
+        // ============================================================
+        async function loadHistory() {
+            document.getElementById('history-loader').style.display = 'block';
+            try {
+                const res = await fetch('/api/history');
+                const convs = await res.json();
+                document.getElementById('history-loader').style.display = 'none';
+                renderRiskChart(convs);
+                renderHistoryCards(convs);
+                updateSidebarStatsFromData(convs);
+            } catch (err) {
+                document.getElementById('history-loader').style.display = 'none';
+                console.error(err);
+            }
+        }
+
+        function renderRiskChart(convs) {
+            const ctx = document.getElementById('riskChart').getContext('2d');
+            if (historyChart) historyChart.destroy();
+            const sorted = [...convs].reverse();
+            historyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sorted.map(c => c.timestamp.split(' ')[0]),
+                    datasets: [{
+                        label: 'Risk Score',
+                        data: sorted.map(c => c.risk_score),
+                        borderColor: '#3b82f6',
+                        tension: 0.3,
+                        fill: true,
+                        backgroundColor: 'rgba(59,130,246,0.08)',
+                        pointBackgroundColor: sorted.map(c => c.risk_score >= 70 ? '#ef4444' : c.risk_score >= 40 ? '#f59e0b' : '#10b981'),
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#64748b', font: { family: 'Outfit' } } } },
+                    scales: {
+                        y: { beginAtZero: true, max: 100, ticks: { color: '#64748b' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        x: { ticks: { color: '#64748b' }, grid: { color: 'rgba(0,0,0,0.05)' } }
+                    }
+                }
+            });
+        }
+
+        function getRiskBadge(score) {
+            if (score >= 70) return `<span class="risk-badge high"><i class="fa-solid fa-triangle-exclamation"></i> High ${score}</span>`;
+            if (score >= 40) return `<span class="risk-badge medium"><i class="fa-solid fa-circle-half-stroke"></i> Medium ${score}</span>`;
+            return `<span class="risk-badge low"><i class="fa-solid fa-circle-check"></i> Low ${score}</span>`;
+        }
+
+        function renderHistoryCards(convs) {
+            if (!convs.length) {
+                document.getElementById('history-list').innerHTML =
+                    '<div style="text-align:center;padding:3rem;color:var(--text-secondary);"><i class="fa-solid fa-inbox" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:1rem;"></i>No conversations yet. Record your first one!</div>';
+                return;
+            }
+            let html = '<div class="history-cards">';
+            convs.forEach(c => {
+                const raw = c.summary ? c.summary.replace(/[#*`_~>]/g, '').trim() : '';
+                const snippet = raw.length > 200 ? raw.substring(0, 200) + '…' : raw;
+                const remindersHtml = c.reminders_list && c.reminders_list.length
+                    ? `<div class="history-reminders"><i class="fa-solid fa-bell"></i> <strong>Reminders:</strong><ul>${c.reminders_list.map(r => `<li>${r}</li>`).join('')}</ul></div>`
+                    : '';
+                html += `
+                <div class="history-card">
+                    <div class="history-card-header">
+                        <span class="history-timestamp"><i class="fa-regular fa-clock"></i> ${c.timestamp}</span>
+                        ${getRiskBadge(c.risk_score)}
+                    </div>
+                    <p class="history-snippet">${snippet}</p>
+                    ${remindersHtml}
+                    <button class="role-btn" style="width:auto;padding:0.5rem 1.1rem;font-size:0.85rem;background:rgba(139,92,246,0.15);margin-top:1rem;"
+                        onclick="startChatWith(${c.id}, '${c.timestamp}')">
+                        <i class="fa-solid fa-comments"></i> Ask AI About This
+                    </button>
+                </div>`;
+            });
+            html += '</div>';
+            document.getElementById('history-list').innerHTML = html;
+        }
+
+
+
+
+        // ============================================================
+        // CHAT TAB
+        // ============================================================
+        let chatConversations = [];
+        let activeChatConvId = null;
+        let chatHistory = [];
+
+        async function loadChatConversations() {
+            try {
+                const res = await fetch('/api/history');
+                chatConversations = await res.json();
+                const sel = document.getElementById('chat-conv-select');
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">— Select conversation —</option>';
+                chatConversations.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = `${c.timestamp}  (Risk: ${c.risk_score})`;
+                    sel.appendChild(opt);
+                });
+                if (currentVal) sel.value = currentVal;
+            } catch (e) { console.error(e); }
+        }
+
+        function onConvSelectChange() {
+            const id = document.getElementById('chat-conv-select').value;
+            if (!id) return;
+            const conv = chatConversations.find(c => String(c.id) === String(id));
+            if (conv) startChatWith(conv.id, conv.timestamp);
+        }
+
+        function startChatWith(convId, timestamp) {
+            activeChatConvId = convId;
+            chatHistory = [];
+            document.getElementById('chat-context-label').textContent = `Meeting: ${timestamp}`;
+            document.getElementById('chat-conv-select').value = convId;
+            document.getElementById('chat-input').disabled = false;
+            document.getElementById('chat-send-btn').disabled = false;
+
+            const messagesEl = document.getElementById('chat-messages');
+            messagesEl.innerHTML = `
+                <div class="chat-welcome" style="padding:2rem 1rem;">
+                    <div class="chat-avatar" style="margin:0 auto 1rem; width:52px; height:52px; font-size:1.4rem;">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <p style="color:var(--text-secondary); max-width:340px; margin:0 auto; line-height:1.7;">
+                        I've loaded the <strong>${timestamp}</strong> conversation.<br>
+                        What would you like to know?
+                    </p>
+                </div>`;
+            switchTab('chat');
+            document.getElementById('chat-input').focus();
+        }
+
+        function appendChatBubble(role, content) {
+            const el = document.getElementById('chat-messages');
+            const welcome = el.querySelector('.chat-welcome');
+            if (welcome) welcome.remove();
+
+            const div = document.createElement('div');
+            div.className = `chat-bubble ${role}`;
+            if (role === 'ai') {
+                div.innerHTML = DOMPurify.sanitize(marked.parse(content));
+            } else {
+                div.textContent = content;
+            }
+            el.appendChild(div);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function showTyping() {
+            const el = document.getElementById('chat-messages');
+            const d = document.createElement('div');
+            d.className = 'chat-bubble ai typing-indicator';
+            d.id = 'typing-indicator';
+            d.innerHTML = '<span></span><span></span><span></span>';
+            el.appendChild(d);
+            el.scrollTop = el.scrollHeight;
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message || !activeChatConvId) return;
+
+            input.value = '';
+            input.disabled = true;
+            document.getElementById('chat-send-btn').disabled = true;
+
+            appendChatBubble('user', message);
+            showTyping();
+
+            const historyToSend = [...chatHistory];
+            chatHistory.push({ role: 'user', content: message });
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        conversation_id: activeChatConvId,
+                        message,
+                        history: historyToSend,
+                        role: USER_ROLE
+                    })
+                });
+                const data = await res.json();
+                document.getElementById('typing-indicator')?.remove();
+                if (data.error) {
+                    appendChatBubble('ai', `❌ ${data.error}`);
+                } else {
+                    appendChatBubble('ai', data.reply);
+                    chatHistory.push({ role: 'ai', content: data.reply });
+                }
+            } catch (err) {
+                document.getElementById('typing-indicator')?.remove();
+                appendChatBubble('ai', '❌ Failed to connect. Please try again.');
+            }
+
+            input.disabled = false;
+            input.focus();
+            document.getElementById('chat-send-btn').disabled = false;
+        }
+
+        // Initial load
+        loadChatConversations();
+
+        function handleChatKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) sendChatMessage();
+        }
+    </script>
+
+</body>
+</html>

@@ -18,6 +18,16 @@ db.init_app(app)
 
 with app.app_context():
     db.create_all()
+    # Migrate: add 'role' column to existing databases if missing
+    try:
+        from sqlalchemy import text
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE conversation ADD COLUMN role VARCHAR(20) DEFAULT 'Home'"))
+            conn.commit()
+        print("✅ Migration: added 'role' column to conversation table.")
+    except Exception:
+        pass  # Column already exists — safe to ignore
+
 
 # Ensure audio directory exists
 os.makedirs(os.path.dirname(AUDIO_FILE), exist_ok=True)
@@ -72,8 +82,9 @@ def handle_transcribe():
                 "summary": "❌ No speech or words were detected."
             })
             
-        # Step 3: Summarize
-        summary_data = generate_summary(cleaned)
+        # Step 3: Summarize — read role from form data (sent by JS), fallback to session
+        role = request.form.get('role') or session.get('role', 'Home')
+        summary_data = generate_summary(cleaned, role=role)
         
         # If generate_summary returns a JSON string, we should parse it. 
         # But wait! I haven't updated summarizer.py yet. For now, it returns a markdown string.
@@ -93,7 +104,8 @@ def handle_transcribe():
         new_conv = Conversation(
             raw_transcript=cleaned,
             summary=summary_text,
-            risk_score=risk_score
+            risk_score=risk_score,
+            role=role
         )
         db.session.add(new_conv)
         db.session.commit()
@@ -124,8 +136,9 @@ def update_transcript():
     if not conv:
         return jsonify({"error": "Conversation not found"}), 404
         
-    # Re-trigger summarize
-    summary_data = generate_summary(new_transcript)
+    # Re-trigger summarize — read role from JSON body (sent by JS), fallback to session
+    role = data.get('role') or session.get('role', 'Home')
+    summary_data = generate_summary(new_transcript, role=role)
     
     summary_text = summary_data
     risk_score = 0
@@ -174,7 +187,8 @@ def download_txt():
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
-    convs = Conversation.query.order_by(Conversation.timestamp.desc()).limit(20).all()
+    role = session.get('role', 'Home')
+    convs = Conversation.query.filter_by(role=role).order_by(Conversation.timestamp.desc()).limit(20).all()
     history_data = []
     for c in convs:
         rems = [r.text for r in Reminder.query.filter_by(conversation_id=c.id).all()]
@@ -183,5 +197,28 @@ def get_history():
         history_data.append(d)
     return jsonify(history_data)
 
+@app.route('/api/chat', methods=['POST'])
+def chat_endpoint():
+    data = request.json
+    conversation_id = data.get('conversation_id')
+    message = data.get('message', '').strip()
+    history = data.get('history', [])
+    role = data.get('role') or session.get('role', 'Home')
+
+    if not message:
+        return jsonify({"error": "Empty message"}), 400
+
+    conv = Conversation.query.get(conversation_id) if conversation_id else None
+    transcript = conv.raw_transcript if conv else "No specific transcript available."
+    summary = conv.summary if conv else "No summary available."
+
+    try:
+        from summarizer import ask_question
+        reply = ask_question(transcript, summary, history, message, role=role)
+        return jsonify({"reply": reply})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+

@@ -12,6 +12,7 @@ class Conversation(db.Model):
     raw_transcript = db.Column(db.Text, nullable=False)
     summary = db.Column(db.Text, nullable=False)
     risk_score = db.Column(db.Integer, default=0)
+    role = db.Column(db.String(20), default='Home')  # 'Home' or 'Corporate'
     
     def to_dict(self):
         return {
@@ -19,8 +20,10 @@ class Conversation(db.Model):
             "timestamp": self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
             "raw_transcript": self.raw_transcript,
             "summary": self.summary,
-            "risk_score": self.risk_score
+            "risk_score": self.risk_score,
+            "role": self.role
         }
+
 
 class Reminder(db.Model):
     __tablename__ = 'reminder'

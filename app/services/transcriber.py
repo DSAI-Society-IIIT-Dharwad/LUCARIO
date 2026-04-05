@@ -4,6 +4,7 @@ from pyannote.audio import Pipeline
 from config import WHISPER_MODEL, HF_TOKEN
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"🖥️  Using device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if torch.cuda.is_available() else " (CPU — CUDA not found)"))
 
 print("⏳ Loading Whisper model...")
 model = whisper.load_model(WHISPER_MODEL).to(device)
@@ -46,7 +47,7 @@ def transcribe_audio(file_path):
         "sample_rate": sample_rate
     }
 
-    print("🗣️ Running Whisper transcription...")
+    print(f"🗣️ Running Whisper transcription on {device}...")
     # Removed language="en" to allow default multilingual language detection
     # condition_on_previous_text=False prevents the model from getting "stuck" in the language of the first speaker
     finance_prompt = "The following is a conversation between a financial advisor and a client discussing investments, mutual funds, loans, and other financial topics."
